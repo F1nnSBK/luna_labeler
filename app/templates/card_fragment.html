@@ -201,6 +201,9 @@
             const y = Math.round((e.clientY - rect.top) * (256 / rect.height));
 
             if (assistedMode) {
+                // Auto-commit any active shape before starting a new one
+                commitCurrentShape();
+                
                 startX = x;
                 startY = y;
                 isDragging = true;
