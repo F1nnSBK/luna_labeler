@@ -47,18 +47,8 @@ if not weights_path.exists():
             out_file.write(response.read())
         print("MobileSAM weights downloaded successfully (fallback method).")
 
-# Load MobileSAM model with hot-swap capability
-sam_last_loaded = 0
-sam_model = None
-
-def get_sam_model():
-    global sam_model, sam_last_loaded
-    current_mtime = weights_path.stat().st_mtime if weights_path.exists() else 0
-    if sam_model is None or current_mtime > sam_last_loaded:
-        print("Loading/Reloading SAM model weights...")
-        sam_model = SAM(str(weights_path))
-        sam_last_loaded = current_mtime
-    return sam_model
+# Load MobileSAM model
+sam_model = SAM(str(weights_path))
 
 # BLIP model removed in favor of zero-latency NumPy/OpenCV statistical feature generator
 
@@ -79,6 +69,13 @@ class MetricPayload(BaseModel):
     spatial_vector_data: str | None = None
 
 
+def get_db_stats(db: Session) -> dict:
+    pending = db.query(TelemetryComponent).filter_by(validation_status="PENDING").count()
+    verified = db.query(TelemetryComponent).filter_by(validation_status="VERIFIED").count()
+    synced = db.query(TelemetryComponent).filter(TelemetryComponent.validation_status == "VERIFIED", TelemetryComponent.synced_to_hf == True).count()
+    return {"pending": pending, "verified": verified, "synced": synced}
+
+
 @app.get("/")
 async def root_redirect():
     """Redirects root traffic to the calibration dashboard."""
@@ -96,7 +93,13 @@ async def render_dashboard_shell(request: Request, response: Response, db: Sessi
     
     rendered_template = templates.TemplateResponse(
         "index.html", 
-        {"request": request, "payload": payload, "steps": 0}
+        {
+            "request": request, 
+            "payload": payload, 
+            "steps": 0, 
+            "stats": get_db_stats(db), 
+            "sync_result": None
+        }
     )
     rendered_template.set_cookie(key="labeler_session_id", value=session_id, max_age=2592000) # 30 days
     return rendered_template
@@ -131,7 +134,13 @@ async def handle_dashboard_interact(
     
     return templates.TemplateResponse(
         "card_fragment.html", 
-        {"request": request, "payload": next_payload, "steps": next_steps}
+        {
+            "request": request, 
+            "payload": next_payload, 
+            "steps": next_steps, 
+            "stats": get_db_stats(db), 
+            "sync_result": None
+        }
     )
 
 
@@ -142,6 +151,24 @@ async def get_next_telemetry_payload(request: Request, execution_steps: int, db:
     if not payload:
         raise HTTPException(status_code=404, detail="No pipeline payloads available")
     return payload
+
+
+from app.cron import run_sync_cycle
+
+@app.post("/api/v1/sync/trigger", response_class=HTMLResponse)
+async def trigger_manual_sync(request: Request, db: Session = Depends(get_db)):
+    """Manually triggers the Hugging Face sync cycle and returns updated statistics."""
+    sync_count = 0
+    try:
+        sync_count = run_sync_cycle(db)
+    except Exception as e:
+        print(f"[MANUAL_SYNC_ERROR] Failed: {e}")
+        
+    stats = get_db_stats(db)
+    return templates.TemplateResponse(
+        "stats_panel.html",
+        {"request": request, "stats": stats, "sync_result": sync_count}
+    )
 
 
 @app.get("/api/v1/image/{component_id}")
@@ -224,8 +251,7 @@ async def sam_predict(
             image_obj = image_obj.convert("RGB")
             
         # Run MobileSAM prediction with Bounding Box coordinates mapping to 256x256 image pixels
-        model_instance = get_sam_model()
-        results = model_instance.predict(image_obj, bboxes=[x_min, y_min, x_max, y_max], verbose=False)
+        results = sam_model.predict(image_obj, bboxes=[x_min, y_min, x_max, y_max], verbose=False)
         
         rounded_points = []
         if results and len(results) > 0 and results[0].masks is not None:
@@ -273,7 +299,13 @@ async def handle_dashboard_undo(request: Request, execution_steps: int, db: Sess
 
     return templates.TemplateResponse(
         "card_fragment.html", 
-        {"request": request, "payload": payload, "steps": max(0, execution_steps - 1)}
+        {
+            "request": request, 
+            "payload": payload, 
+            "steps": max(0, execution_steps - 1), 
+            "stats": get_db_stats(db), 
+            "sync_result": None
+        }
     )
 
 
@@ -281,19 +313,16 @@ import asyncio
 from app.cron import sync_supabase_to_huggingface
 import app.cron as cron
 import app.active_learning as al
-import app.retrain_worker as rw
 
 @app.on_event("startup")
 async def startup_event_hook():
     # Pass the data loader memory pointer to reference caches
     cron.hf_source_cache = hf_dataset_cache
     al.hf_source_cache = hf_dataset_cache
-    rw.hf_source_cache = hf_dataset_cache
     
-    # Initialize SAM model
-    get_sam_model()
+    # Initialize Hugging Face dataset if missing
+    cron.initialize_hf_dataset_repo()
     
     # Fire and forget the background threads safely inside the async loop
     asyncio.create_task(sync_supabase_to_huggingface())
     asyncio.create_task(al.active_learning_loop())
-    asyncio.create_task(rw.retrain_worker_loop(weights_path))

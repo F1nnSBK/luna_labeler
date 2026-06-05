@@ -1,0 +1,46 @@
+<div id="stats-panel" class="space-y-4 pt-4 border-t border-zinc-900/60">
+    <style>
+        .htmx-indicator { display: none; }
+        .htmx-request .htmx-indicator { display: inline; }
+        .htmx-request.htmx-indicator { display: inline; }
+    </style>
+    
+    <span class="text-[10px] uppercase tracking-widest text-zinc-600 block">Dataset Status</span>
+    <div class="grid grid-cols-3 gap-2 text-center text-[11px]">
+        <div class="bg-zinc-950/60 border border-zinc-900 rounded-lg p-2">
+            <div class="text-[9px] text-zinc-650 font-bold">PENDING</div>
+            <div class="text-amber-500/80 font-bold font-mono text-sm mt-0.5">{{ stats.pending }}</div>
+        </div>
+        <div class="bg-zinc-950/60 border border-zinc-900 rounded-lg p-2">
+            <div class="text-[9px] text-zinc-650 font-bold">VERIFIED</div>
+            <div class="text-emerald-500/80 font-bold font-mono text-sm mt-0.5">{{ stats.verified }}</div>
+        </div>
+        <div class="bg-zinc-950/60 border border-zinc-900 rounded-lg p-2">
+            <div class="text-[9px] text-zinc-650 font-bold">SYNCED</div>
+            <div class="text-blue-500/80 font-bold font-mono text-sm mt-0.5">{{ stats.synced }}</div>
+        </div>
+    </div>
+    
+    <div class="space-y-2">
+        <button hx-post="/api/v1/sync/trigger"
+                hx-target="#stats-panel"
+                hx-swap="outerHTML"
+                hx-indicator="#sync-spinner"
+                class="w-full bg-blue-950/30 hover:bg-blue-900/50 border border-blue-900/50 hover:border-blue-800 text-blue-400 hover:text-blue-300 text-[11px] py-2 rounded-lg font-mono transition-all flex items-center justify-center gap-2 cursor-pointer">
+            <span>FORCE SYNC TO HF</span>
+            <svg id="sync-spinner" class="animate-spin h-3.5 w-3.5 text-blue-400 htmx-indicator" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+        </button>
+        {% if sync_result is not none %}
+        <div class="text-[10px] text-zinc-500 text-center font-mono">
+            {% if sync_result > 0 %}
+            <span class="text-emerald-500 font-bold animate-pulse">✓ Sync complete: +{{ sync_result }} objects!</span>
+            {% else %}
+            <span class="text-zinc-400">All objects already synced.</span>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
