@@ -26,8 +26,13 @@ app = FastAPI(title="Lunar Telemetry Validation Service")
 # Load dataset into memory on startup (339MB is easily handled by HF Spaces/local RAM)
 hf_dataset_cache = load_dataset("F1nnSBK/lunar-pits-dataset", token=settings.HF_TOKEN)
 
-# Check and download MobileSAM weights on startup
-weights_dir = Path("weights")
+# Check and download MobileSAM weights on startup (redirect to writeable /tmp on HF Spaces)
+import os
+if os.environ.get("HOME") == "/home/user" or not os.access(".", os.W_OK):
+    weights_dir = Path("/tmp/weights")
+else:
+    weights_dir = Path("weights")
+
 weights_path = weights_dir / "mobile_sam.pt"
 if not weights_path.exists():
     weights_dir.mkdir(parents=True, exist_ok=True)
