@@ -10,3 +10,5 @@ python-dotenv==1.2.1
 datasets==3.0.1
 Pillow>=10.0.0
 python-multipart>=0.0.7
+ultralytics==8.2.0
+opencv-python-headless

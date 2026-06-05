@@ -24,3 +24,6 @@ data_export/
 # OS Specific
 .DS_Store
 Thumbs.db
+
+# Model weights
+weights/

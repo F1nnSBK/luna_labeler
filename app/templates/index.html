@@ -1,34 +1,24 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Telemetry Calibration Engine</title>
-    <!-- Tailwind CSS & HTMX CDNs -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <style>
+        /* Unauffällige Custom Scrollbars und Cursor-Fallbacks */
+        body { background-color: #09090b; }
+        .cursor-pit { cursor: crosshair; }
+    </style>
 </head>
+<body class="text-zinc-400 min-h-screen flex flex-col font-mono select-none antialiased">
 
-<body class="bg-zinc-950 text-zinc-50 min-h-screen flex flex-col font-sans select-none">
-
-    <!-- Academic Camouflage Header -->
-    <header
-        class="border-b border-zinc-800 bg-zinc-900/50 px-6 py-4 flex justify-between items-center backdrop-blur-md">
-        <div class="flex items-center space-x-3">
-            <div class="h-3 w-3 rounded-full bg-emerald-500 animate-pulse"></div>
-            <span class="font-mono text-xs tracking-wider text-zinc-400">LUNA_CORE // SYS_CALIBRATION_v1.4.2</span>
-        </div>
-        <h1 class="text-sm font-semibold tracking-wide uppercase text-zinc-300">Statistical Telemetry Dashboard</h1>
-    </header>
-
-    <!-- Main Workspace -->
-    <main class="flex-1 flex flex-col items-center justify-center p-4">
-        <div id="calibration-workspace" class="w-full max-w-4xl transition-all duration-300">
-            <!-- HTMX injects the dynamic card fragment right here -->
+    <main class="flex-1 flex flex-col items-center justify-center p-6 w-full">
+        <div id="calibration-workspace" class="w-full flex flex-col items-center justify-center">
             {% include "card_fragment.html" %}
         </div>
     </main>
-</body>
 
+</body>
 </html>

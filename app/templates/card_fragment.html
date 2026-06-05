@@ -1,80 +1,66 @@
-<div class="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-2xl flex flex-col md:flex-row gap-6 items-stretch">
-    <!-- Left panel: Info & Controls -->
-    <div class="flex-1 flex flex-col justify-between space-y-6 min-w-[280px]">
-        <!-- Top part of left panel -->
+<div class="w-full max-w-5xl flex flex-col md:flex-row items-center justify-center gap-8 h-[768px]">
+    
+    <div class="w-full md:w-64 flex flex-col justify-between h-full py-4 font-mono">
+        
         <div class="space-y-6">
-            <!-- Metrics and Counters -->
-            <div class="flex justify-between items-center text-xs font-mono text-zinc-500">
-                <span>ID: <span class="text-zinc-400">{{ payload.component_id }}</span></span>
-                <span class="bg-zinc-800 px-2 py-1 rounded text-emerald-400">Steps: {{ steps }}</span>
+            <div class="flex flex-col space-y-2">
+                <span class="text-[10px] uppercase tracking-widest text-zinc-600">Operator Session</span>
+                <input type="text" id="operator-nick" placeholder="Enter Nickname..." 
+                       class="bg-zinc-900/50 border border-zinc-800 text-zinc-300 px-3 py-2 rounded-lg text-xs focus:outline-none focus:border-zinc-700 font-mono w-full transition-colors" />
             </div>
 
-            <!-- Dynamic Gen-Z Heuristic Notification Box -->
-            <div class="bg-zinc-950/60 border border-zinc-800/80 rounded-xl p-4 text-center">
-                <p class="text-xs font-mono uppercase tracking-widest text-zinc-500 mb-1">Heuristic Output String</p>
-                <p class="text-sm font-medium tracking-wide text-zinc-200">"{{ payload.telemetry_string }}"</p>
+            <div class="space-y-1.5 text-xs text-zinc-500">
+                <div class="flex justify-between"><span>COMPONENT:</span> <span class="text-zinc-400 font-bold">{{ payload.component_id }}</span></div>
+                <div class="flex justify-between"><span>PIPELINE:</span> <span class="text-zinc-500 text-[11px]">{{ payload.eval_tier }}</span></div>
+                <div class="flex justify-between"><span>STEPS_TOTAL:</span> <span class="text-emerald-500">{{ steps }}</span></div>
             </div>
 
-            <!-- Mode Status Indicators -->
-            <div class="space-y-2">
-                <p class="text-[10px] font-mono uppercase tracking-widest text-zinc-500">Active Tool (1-3)</p>
-                <div class="grid grid-cols-1 gap-2">
-                    <div id="mode-pit" class="px-3 py-2 text-xs font-mono rounded bg-emerald-900/50 text-emerald-500 border border-emerald-500 flex justify-between items-center">
-                        <span>PIT</span>
-                        <kbd class="bg-emerald-950/40 px-2 py-0.5 rounded text-[10px] text-emerald-300">1</kbd>
-                    </div>
-                    <div id="mode-stone" class="px-3 py-2 text-xs font-mono rounded bg-zinc-900 text-zinc-500 border border-transparent flex justify-between items-center">
-                        <span>STONE</span>
-                        <kbd class="bg-zinc-950/40 px-2 py-0.5 rounded text-[10px] text-zinc-500">2</kbd>
-                    </div>
-                    <div id="mode-crater" class="px-3 py-2 text-xs font-mono rounded bg-zinc-900 text-zinc-500 border border-transparent flex justify-between items-center">
-                        <span>CRATER</span>
-                        <kbd class="bg-zinc-950/40 px-2 py-0.5 rounded text-[10px] text-zinc-500">3</kbd>
-                    </div>
+            <div class="space-y-2 pt-2">
+                <span class="text-[10px] uppercase tracking-widest text-zinc-600">Active Weapon</span>
+                <div id="active-tool-indicator" class="text-emerald-500 text-sm font-bold tracking-widest border-l-2 border-emerald-500 pl-3 transition-all">
+                    MODE_PIT
                 </div>
             </div>
+
+            <div class="space-y-1 pt-2 border-t border-zinc-900/40">
+                <span class="text-[10px] uppercase tracking-widest text-zinc-600">Heuristic Engine</span>
+                <p class="text-xs text-zinc-400 italic leading-relaxed">"{{ payload.telemetry_string }}"</p>
+            </div>
         </div>
 
-        <!-- Bottom part of left panel -->
         <div class="space-y-4">
-            <!-- Submit Button (Enter) -->
-            <button id="btn-submit" 
-                    hx-post="/dashboard/submit/{{ payload.component_id }}?execution_steps={{ steps }}"
-                    hx-include="#spatial-vector-data"
-                    hx-target="#calibration-workspace"
-                    hx-swap="innerHTML"
-                    class="w-full py-3 bg-zinc-100 text-zinc-900 hover:bg-zinc-200 active:bg-zinc-300 rounded-xl font-bold transition-colors text-sm flex justify-between items-center px-6">
-                <span>Save & Next</span>
-                <kbd class="bg-zinc-300/60 px-2 py-0.5 rounded text-[10px] text-zinc-800">Enter</kbd>
-            </button>
+            <div class="border border-zinc-900 bg-zinc-950/40 rounded-xl p-4 space-y-2 text-[11px] text-zinc-500">
+                <div class="flex justify-between"><span class="text-zinc-400">[1, 2, 3]</span> <span>Switch Weapon</span></div>
+                <div class="flex justify-between"><span class="text-zinc-400">[Space]</span> <span>Freeze Shape</span></div>
+                <div class="flex justify-between"><span class="text-zinc-400">[Z]</span> <span>Undo Segment</span></div>
+                <div class="flex justify-between"><span class="text-zinc-400">[ESC]</span> <span>Wipe All</span></div>
+                <div class="flex justify-between"><span class="text-zinc-400">[Backspace]</span> <span>Revert Last</span></div>
+            </div>
 
-            <!-- Guide / Legend -->
-            <div class="border border-zinc-800 rounded-xl p-3 bg-zinc-950/40 space-y-1.5 text-[11px] font-mono text-zinc-400">
-                <div class="flex justify-between"><span>[Space]</span> <span class="text-zinc-500">Freeze Polygon</span></div>
-                <div class="flex justify-between"><span>[Z]</span> <span class="text-zinc-500">Undo Node</span></div>
-                <div class="flex justify-between"><span>[ESC]</span> <span class="text-zinc-500">Clear Active</span></div>
-                <div class="flex justify-between"><span>[Backspace]</span> <span class="text-zinc-500">Revert Last Image</span></div>
+            <div class="text-[11px] text-zinc-600 font-bold text-right tracking-wide">
+                Press [Enter] to Sync Matrix
             </div>
         </div>
     </div>
 
-    <!-- Right panel: Image Window -->
-    <div class="flex-2 relative aspect-square w-full md:w-[512px] md:h-[512px] rounded-xl overflow-hidden border border-zinc-800 bg-zinc-950 flex items-center justify-center shrink-0">
-        <img src="{{ payload.image_routing_url }}" id="target-image" alt="Lunar Anomaly Target"
-            class="w-full h-full object-cover select-none pointer-events-none" />
+    <div class="relative w-[768px] h-[768px] rounded-xl overflow-hidden bg-zinc-950 border border-zinc-900 shadow-2xl flex-shrink-0">
         
-        <canvas id="polygon-canvas" class="absolute top-0 left-0 w-full h-full cursor-crosshair"></canvas>
+        <img src="{{ payload.image_routing_url }}" id="target-image" alt="Lunar Target"
+            class="w-full h-full object-cover opacity-90 select-none pointer-events-none" />
+        
+        <canvas id="polygon-canvas" class="absolute top-0 left-0 w-full h-full cursor-crosshair z-10"></canvas>
         
         <input type="hidden" id="spatial-vector-data" name="spatial_vector_data" value="[]">
-
-        <!-- Subtle Camouflage Tag -->
-        <span
-            class="absolute bottom-3 right-3 text-[10px] font-mono bg-black/60 px-2 py-0.5 rounded text-zinc-400 backdrop-blur-sm z-10 pointer-events-none">
-            {{ payload.eval_tier }}
-        </span>
     </div>
 
-    <!-- Hidden undo button -->
+    <button id="btn-submit" 
+            hx-post="/dashboard/submit/{{ payload.component_id }}?execution_steps={{ steps }}"
+            hx-include="#spatial-vector-data"
+            hx-target="#calibration-workspace"
+            hx-swap="innerHTML"
+            class="hidden">
+    </button>
+    
     <button id="btn-undo" 
             hx-post="/dashboard/undo?execution_steps={{ steps }}"
             hx-target="#calibration-workspace"
@@ -88,11 +74,13 @@
         const canvas = document.getElementById('polygon-canvas');
         const ctx = canvas.getContext('2d');
         const hiddenInput = document.getElementById('spatial-vector-data');
+        const toolIndicator = document.getElementById('active-tool-indicator');
+        const nickInput = document.getElementById('operator-nick');
         
         const COLORS = {
-            'PIT': { stroke: '#10b981', fill: 'rgba(16, 185, 129, 0.2)' },
-            'STONE': { stroke: '#f59e0b', fill: 'rgba(245, 158, 11, 0.2)' },
-            'CRATER': { stroke: '#ec4899', fill: 'rgba(236, 72, 153, 0.2)' }
+            'PIT': { stroke: '#10b981', fill: 'rgba(16, 185, 129, 0.15)', textClass: 'text-emerald-500', borderClass: 'border-emerald-500' },
+            'STONE': { stroke: '#f59e0b', fill: 'rgba(245, 158, 11, 0.15)', textClass: 'text-amber-500', borderClass: 'border-amber-500' },
+            'CRATER': { stroke: '#ec4899', fill: 'rgba(236, 72, 153, 0.15)', textClass: 'text-pink-500', borderClass: 'border-pink-500' }
         };
 
         let activeClass = 'PIT';
@@ -102,19 +90,25 @@
         canvas.width = canvas.offsetWidth;
         canvas.height = canvas.offsetHeight;
 
+        // Nickname management inside localStorage
+        if (localStorage.getItem('luna_operator_nick')) {
+            nickInput.value = localStorage.getItem('luna_operator_nick');
+        }
+        nickInput.addEventListener('input', (e) => {
+            localStorage.setItem('luna_operator_nick', e.target.value.replace(/[^a-zA-Z0-9]/g, '_'));
+        });
+
+        // Set Cookie before submission to ensure FastAPI stamps the nickname
+        function stampSessionCookie() {
+            const nick = nickInput.value.trim() || "anonymous";
+            const sessionBase = document.cookie.split('; ').find(row => row.startsWith('labeler_session_id='))?.split('=')[1] || "session";
+            const clearBase = sessionBase.split('__')[0];
+            document.cookie = `labeler_session_id=${nick}__${clearBase}; path=/; max-age=2592000`;
+        }
+
         function updateUI() {
-            ['pit', 'stone', 'crater'].forEach(c => {
-                const el = document.getElementById(`mode-${c}`);
-                if (c.toUpperCase() === activeClass) {
-                    el.className = `px-2 py-1 text-xs font-mono rounded border ${
-                        activeClass === 'PIT' ? 'bg-emerald-900/50 text-emerald-500 border-emerald-500' :
-                        activeClass === 'STONE' ? 'bg-amber-900/50 text-amber-500 border-amber-500' :
-                        'bg-pink-900/50 text-pink-500 border-pink-500'
-                    }`;
-                } else {
-                    el.className = 'px-2 py-1 text-xs font-mono rounded bg-zinc-900 text-zinc-600 border border-transparent';
-                }
-            });
+            toolIndicator.textContent = `MODE_${activeClass}`;
+            toolIndicator.className = `${COLORS[activeClass].textClass} text-sm font-bold tracking-widest border-l-2 ${COLORS[activeClass].borderClass} pl-3 transition-all`;
         }
 
         function updatePayload() {
@@ -129,8 +123,8 @@
             ctx.beginPath();
             ctx.strokeStyle = COLORS[cls].stroke;
             ctx.fillStyle = COLORS[cls].fill;
-            ctx.lineWidth = 2;
-            ctx.setLineDash(isDashed ? [5, 5] : []);
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash(isDashed ? [4, 4] : []);
 
             const scaleX = canvas.width / 256;
             const scaleY = canvas.height / 256;
@@ -140,7 +134,6 @@
                 const cy = p[1] * scaleY;
                 if (index === 0) ctx.moveTo(cx, cy);
                 else ctx.lineTo(cx, cy);
-                ctx.fillRect(cx - 3, cy - 3, 6, 6);
             });
 
             if (points.length > 2) {
@@ -158,14 +151,76 @@
             }
         }
 
+        let isDragging = false;
+        let startX = 0, startY = 0;
+
         canvas.addEventListener('mousedown', function(e) {
+            if (document.activeElement === nickInput) return;
             const rect = canvas.getBoundingClientRect();
-            const x = Math.round((e.clientX - rect.left) * (256 / rect.width));
-            const y = Math.round((e.clientY - rect.top) * (256 / rect.height));
+            startX = Math.round((e.clientX - rect.left) * (256 / rect.width));
+            startY = Math.round((e.clientY - rect.top) * (256 / rect.height));
+            isDragging = true;
+        });
+
+        canvas.addEventListener('mousemove', function(e) {
+            if (!isDragging) return;
+            const rect = canvas.getBoundingClientRect();
+            const currentX = Math.round((e.clientX - rect.left) * (256 / rect.width));
+            const currentY = Math.round((e.clientY - rect.top) * (256 / rect.height));
             
-            currentPolygon.push([x, y]);
-            updatePayload();
             drawAll();
+            
+            const scaleX = canvas.width / 256;
+            const scaleY = canvas.height / 256;
+            ctx.strokeStyle = COLORS[activeClass].stroke;
+            ctx.lineWidth = 1;
+            ctx.setLineDash([3, 3]);
+            ctx.strokeRect(startX * scaleX, startY * scaleY, (currentX - startX) * scaleX, (currentY - startY) * scaleY);
+        });
+
+        canvas.addEventListener('mouseup', function(e) {
+            if (!isDragging) return;
+            isDragging = false;
+            
+            const rect = canvas.getBoundingClientRect();
+            const endX = Math.round((e.clientX - rect.left) * (256 / rect.width));
+            const endY = Math.round((e.clientY - rect.top) * (256 / rect.height));
+            
+            const x_min = Math.min(startX, endX);
+            const y_min = Math.min(startY, endY);
+            const x_max = Math.max(startX, endX);
+            const y_max = Math.max(startY, endY);
+            
+            if (x_max - x_min < 4 || y_max - y_min < 4) {
+                drawAll();
+                return;
+            }
+            
+            drawAll();
+            
+            const formData = new FormData();
+            formData.append('component_id', '{{ payload.component_id }}');
+            formData.append('x_min', x_min);
+            formData.append('y_min', y_min);
+            formData.append('x_max', x_max);
+            formData.append('y_max', y_max);
+            
+            fetch('/api/v1/sam/predict', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(points => {
+                if (points && points.length > 2) {
+                    completedPolygons.push({ class: activeClass, points: points });
+                    updatePayload();
+                }
+                drawAll();
+            })
+            .catch(err => {
+                console.error("SAM prediction failed", err);
+                drawAll();
+            });
         });
 
         if (window._lunaKeyHandler) {
@@ -173,39 +228,31 @@
         }
 
         window._lunaKeyHandler = function(e) {
+            if (document.activeElement === nickInput) return;
+
             if (e.key === '1') { activeClass = 'PIT'; updateUI(); drawAll(); }
             if (e.key === '2') { activeClass = 'STONE'; updateUI(); drawAll(); }
             if (e.key === '3') { activeClass = 'CRATER'; updateUI(); drawAll(); }
             
             if (e.key === 'z' || e.key === 'Z') {
-                currentPolygon.pop();
+                completedPolygons.pop();
                 updatePayload();
                 drawAll();
             } 
             else if (e.key === 'Escape') {
                 currentPolygon = [];
+                completedPolygons = []; 
                 updatePayload();
                 drawAll();
             } 
-            else if (e.key === ' ') {
-                e.preventDefault();
-                if (currentPolygon.length > 2) {
-                    completedPolygons.push({ class: activeClass, points: [...currentPolygon] });
-                    currentPolygon = [];
-                    updatePayload();
-                    drawAll();
-                }
-            }
             else if (e.key === 'Enter') {
                 e.preventDefault();
-                if (currentPolygon.length > 2) {
-                    completedPolygons.push({ class: activeClass, points: [...currentPolygon] });
-                    updatePayload();
-                }
+                stampSessionCookie();
                 htmx.trigger('#btn-submit', 'click');
             }
             else if (e.key === 'Backspace') {
                 e.preventDefault();
+                stampSessionCookie();
                 htmx.trigger('#btn-undo', 'click');
             }
         };

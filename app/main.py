@@ -14,6 +14,9 @@ from app.services.telemetry_engine import StochasticCalibrationEngine
 import io
 from datasets import load_dataset
 from app.config import settings
+import urllib.request
+from pathlib import Path
+from ultralytics import SAM
 
 # Initialize database schema
 Base.metadata.create_all(bind=engine)
@@ -22,6 +25,26 @@ app = FastAPI(title="Lunar Telemetry Validation Service")
 
 # Load dataset into memory on startup (339MB is easily handled by HF Spaces/local RAM)
 hf_dataset_cache = load_dataset("F1nnSBK/lunar-pits-dataset", token=settings.HF_TOKEN)
+
+# Check and download MobileSAM weights on startup
+weights_dir = Path("weights")
+weights_path = weights_dir / "mobile_sam.pt"
+if not weights_path.exists():
+    weights_dir.mkdir(parents=True, exist_ok=True)
+    print("Downloading MobileSAM weights...")
+    url = "https://github.com/ultralytics/assets/releases/download/v8.2.0/mobile_sam.pt"
+    try:
+        urllib.request.urlretrieve(url, str(weights_path))
+        print("MobileSAM weights downloaded successfully.")
+    except Exception as e:
+        print(f"Failed to download weights using urlretrieve: {e}. Trying fallback...")
+        with urllib.request.urlopen(url) as response, open(weights_path, 'wb') as out_file:
+            out_file.write(response.read())
+        print("MobileSAM weights downloaded successfully (fallback method).")
+
+# Load MobileSAM model
+sam_model = SAM(str(weights_path))
+
 templates = Jinja2Templates(directory="app/templates")
 
 app.add_middleware(
@@ -158,6 +181,44 @@ async def submit_telemetry_validation(component_id: str, payload: MetricPayload,
     db.commit()
     
     return {"status": "SUCCESS", "logged_steps": payload.execution_steps + 1}
+
+
+@app.post("/api/v1/sam/predict")
+async def sam_predict(
+    component_id: str = Form(...),
+    x_min: float = Form(...),
+    y_min: float = Form(...),
+    x_max: float = Form(...),
+    y_max: float = Form(...),
+    db: Session = Depends(get_db)
+):
+    """Run MobileSAM model inference to auto-generate a mask based on a bounding box prompt."""
+    item = db.query(TelemetryComponent).filter_by(id=component_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Component not found")
+
+    split_name, row_idx = item.file_path.split("::")
+    row_idx = int(row_idx)
+
+    try:
+        image_obj = hf_dataset_cache[split_name][row_idx]["image"]
+        if image_obj.mode != "RGB":
+            image_obj = image_obj.convert("RGB")
+            
+        # Run MobileSAM prediction with bounding box coordinates mapping to 256x256 image pixels
+        # Ultralytics SAM expects coordinates in format [x_min, y_min, x_max, y_max]
+        results = sam_model.predict(image_obj, bboxes=[x_min, y_min, x_max, y_max], verbose=False)
+        
+        if results and len(results) > 0 and results[0].masks is not None:
+            xy_coords = results[0].masks.xy
+            if len(xy_coords) > 0 and len(xy_coords[0]) > 0:
+                points = xy_coords[0].tolist()
+                rounded_points = [[round(p[0]), round(p[1])] for p in points]
+                return rounded_points
+                
+        return []
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"SAM prediction failed: {str(e)}")
 
 
 @app.post("/dashboard/undo", response_class=HTMLResponse)
