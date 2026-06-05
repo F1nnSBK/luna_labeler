@@ -1,6 +1,26 @@
+# Python
 __pycache__/
 *.pyc
-.env
+*.pyo
+*.pyd
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Virtual Environments
 .venv/
 env/
-instance/
+venv/
+ENV/
+
+# Configuration and Secrets
+.env
+.env.*
+!.env.example
+
+# Local Data and Exports
+data/
+data_export/
+
+# OS Specific
+.DS_Store
+Thumbs.db
