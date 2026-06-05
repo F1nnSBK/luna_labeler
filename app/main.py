@@ -17,7 +17,8 @@ from app.config import settings
 import urllib.request
 from pathlib import Path
 from ultralytics import SAM
-from transformers import BlipProcessor, BlipForConditionalGeneration
+import numpy as np
+import cv2
 
 # Initialize database schema
 Base.metadata.create_all(bind=engine)
@@ -46,11 +47,7 @@ if not weights_path.exists():
 # Load MobileSAM model
 sam_model = SAM(str(weights_path))
 
-# Load BLIP image captioning model on CPU
-print("Loading BLIP image captioning model...")
-blip_processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
-blip_model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base")
-print("BLIP model loaded successfully.")
+# BLIP model removed in favor of zero-latency NumPy/OpenCV statistical feature generator
 
 templates = Jinja2Templates(directory="app/templates")
 
@@ -197,9 +194,10 @@ async def sam_predict(
     y_min: float = Form(...),
     x_max: float = Form(...),
     y_max: float = Form(...),
+    active_class: str = Form("STONE"),
     db: Session = Depends(get_db)
 ):
-    """Run MobileSAM model inference to auto-generate a mask based on a bounding box prompt, and BLIP to generate a text description."""
+    """Run MobileSAM model inference to auto-generate a mask based on a bounding box prompt, and calculate NumPy brightness/texture metrics for description."""
     item = db.query(TelemetryComponent).filter_by(id=component_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Component not found")
@@ -213,7 +211,6 @@ async def sam_predict(
             image_obj = image_obj.convert("RGB")
             
         # Run MobileSAM prediction with Bounding Box coordinates mapping to 256x256 image pixels
-        # Ultralytics SAM expects coordinates in format [x_min, y_min, x_max, y_max]
         results = sam_model.predict(image_obj, bboxes=[x_min, y_min, x_max, y_max], verbose=False)
         
         rounded_points = []
@@ -223,25 +220,51 @@ async def sam_predict(
                 points = xy_coords[0].tolist()
                 rounded_points = [[round(p[0]), round(p[1])] for p in points]
         
-        # Crop the bounding box from the original image to run BLIP captioning
-        img_w, img_h = image_obj.size
-        # Bounding box coordinates are scaled to 256x256 on the frontend. Scale them back to actual image size.
-        scale_x = img_w / 256.0
-        scale_y = img_h / 256.0
-        
-        # Ensure coordinates are within valid bounds
-        x1 = max(0.0, min(x_min, 256.0)) * scale_x
-        y1 = max(0.0, min(y_min, 256.0)) * scale_y
-        x2 = max(0.0, min(x_max, 256.0)) * scale_x
-        y2 = max(0.0, min(y_max, 256.0)) * scale_y
-        
         auto_description = "unknown feature"
-        if (x2 - x1) >= 4 and (y2 - y1) >= 4:
-            cropped_img = image_obj.crop((x1, y1, x2, y2))
-            # Run BLIP condition-free captioning
-            inputs = blip_processor(cropped_img, return_tensors="pt")
-            out = blip_model.generate(**inputs, max_new_tokens=20)
-            auto_description = blip_processor.decode(out[0], skip_special_tokens=True)
+        if rounded_points:
+            # Grayscale image conversion for albedo calculation
+            gray_img = image_obj.convert("L")
+            img_arr = np.array(gray_img)
+            
+            # Create a binary mask of the polygon
+            mask = np.zeros(img_arr.shape, dtype=np.uint8)
+            pts = np.array(rounded_points, dtype=np.int32)
+            cv2.fillPoly(mask, [pts], 255)
+            
+            # Extract grayscale pixels within the polygon
+            inside_pixels = img_arr[mask == 255]
+            if len(inside_pixels) > 0:
+                mean_brightness = float(np.mean(inside_pixels))
+                std_dev = float(np.std(inside_pixels))
+            else:
+                mean_brightness = 127.0
+                std_dev = 15.0
+                
+            # Scientific description builder
+            cls = active_class.upper()
+            if cls == "STONE":
+                if mean_brightness > 160:
+                    if std_dev > 25:
+                        auto_description = "A highly reflective, coarse-textured ejecta fragment exhibiting sharp crystalline borders."
+                    else:
+                        auto_description = "A bright, high-albedo anorthosite stone fragment with a relatively uniform, smooth surface."
+                else:
+                    if mean_brightness < 90:
+                        auto_description = "A dark, low-albedo basaltic fragment seamlessly integrated into the regolith matrix."
+                    else:
+                        auto_description = "A medium-albedo, rocky debris component typical of local volcanic flows."
+            elif cls == "CRATER":
+                if std_dev < 15:
+                    auto_description = "A degraded, highly eroded impact depression with smooth inner slopes and shallow rim relief."
+                else:
+                    auto_description = "A fresh lunar impact crater with well-defined rim segments and complex shadow distributions."
+            elif cls == "PIT":
+                if mean_brightness < 40:
+                    auto_description = "A steep subsurface collapse feature characterized by a total-shadow interior cavity."
+                else:
+                    auto_description = "A volcanic collapse pit exhibiting distinct layering along its inner wall structure."
+            else:
+                auto_description = f"A lunar surface anomaly classified as {cls}."
             
         return {"points": rounded_points, "auto_description": auto_description}
     except Exception as e:

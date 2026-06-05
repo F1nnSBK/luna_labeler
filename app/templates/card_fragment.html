@@ -272,6 +272,7 @@
             formData.append('y_min', y_min);
             formData.append('x_max', x_max);
             formData.append('y_max', y_max);
+            formData.append('active_class', activeClass);
             
             fetch('/api/v1/sam/predict', {
                 method: 'POST',
