@@ -17,8 +17,6 @@ from app.config import settings
 import urllib.request
 from pathlib import Path
 from ultralytics import SAM
-import numpy as np
-import cv2
 
 # Initialize database schema
 Base.metadata.create_all(bind=engine)
@@ -194,10 +192,9 @@ async def sam_predict(
     y_min: float = Form(...),
     x_max: float = Form(...),
     y_max: float = Form(...),
-    active_class: str = Form("STONE"),
     db: Session = Depends(get_db)
 ):
-    """Run MobileSAM model inference to auto-generate a mask based on a bounding box prompt, and calculate NumPy brightness/texture metrics for description."""
+    """Run MobileSAM model inference to auto-generate a mask based on a bounding box prompt."""
     item = db.query(TelemetryComponent).filter_by(id=component_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Component not found")
@@ -220,55 +217,9 @@ async def sam_predict(
                 points = xy_coords[0].tolist()
                 rounded_points = [[round(p[0]), round(p[1])] for p in points]
         
-        auto_description = "unknown feature"
-        if rounded_points:
-            # Grayscale image conversion for albedo calculation
-            gray_img = image_obj.convert("L")
-            img_arr = np.array(gray_img)
-            
-            # Create a binary mask of the polygon
-            mask = np.zeros(img_arr.shape, dtype=np.uint8)
-            pts = np.array(rounded_points, dtype=np.int32)
-            cv2.fillPoly(mask, [pts], 255)
-            
-            # Extract grayscale pixels within the polygon
-            inside_pixels = img_arr[mask == 255]
-            if len(inside_pixels) > 0:
-                mean_brightness = float(np.mean(inside_pixels))
-                std_dev = float(np.std(inside_pixels))
-            else:
-                mean_brightness = 127.0
-                std_dev = 15.0
-                
-            # Scientific description builder
-            cls = active_class.upper()
-            if cls == "STONE":
-                if mean_brightness > 160:
-                    if std_dev > 25:
-                        auto_description = "A highly reflective, coarse-textured ejecta fragment exhibiting sharp crystalline borders."
-                    else:
-                        auto_description = "A bright, high-albedo anorthosite stone fragment with a relatively uniform, smooth surface."
-                else:
-                    if mean_brightness < 90:
-                        auto_description = "A dark, low-albedo basaltic fragment seamlessly integrated into the regolith matrix."
-                    else:
-                        auto_description = "A medium-albedo, rocky debris component typical of local volcanic flows."
-            elif cls == "CRATER":
-                if std_dev < 15:
-                    auto_description = "A degraded, highly eroded impact depression with smooth inner slopes and shallow rim relief."
-                else:
-                    auto_description = "A fresh lunar impact crater with well-defined rim segments and complex shadow distributions."
-            elif cls == "PIT":
-                if mean_brightness < 40:
-                    auto_description = "A steep subsurface collapse feature characterized by a total-shadow interior cavity."
-                else:
-                    auto_description = "A volcanic collapse pit exhibiting distinct layering along its inner wall structure."
-            else:
-                auto_description = f"A lunar surface anomaly classified as {cls}."
-            
-        return {"points": rounded_points, "auto_description": auto_description}
+        return rounded_points
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"SAM prediction or captioning failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"SAM prediction failed: {str(e)}")
 
 
 @app.post("/dashboard/undo", response_class=HTMLResponse)

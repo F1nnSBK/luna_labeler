@@ -30,12 +30,6 @@
                 </label>
             </div>
 
-            <div class="flex flex-col space-y-2 pt-2 border-t border-zinc-900/40">
-                <span class="text-[10px] uppercase tracking-widest text-zinc-600">Object Description</span>
-                <input type="text" id="object-desc" placeholder="No active object..." 
-                       class="bg-zinc-900/50 border border-zinc-800 text-zinc-300 px-3 py-2 rounded-lg text-xs focus:outline-none focus:border-zinc-700 font-mono w-full transition-colors" />
-            </div>
-
             <div class="space-y-1 pt-2 border-t border-zinc-900/40">
                 <span class="text-[10px] uppercase tracking-widest text-zinc-600">Heuristic Engine</span>
                 <p class="text-xs text-zinc-400 italic leading-relaxed">"{{ payload.telemetry_string }}"</p>
@@ -91,7 +85,6 @@
         const hiddenInput = document.getElementById('spatial-vector-data');
         const toolIndicator = document.getElementById('active-tool-indicator');
         const nickInput = document.getElementById('operator-nick');
-        const descInput = document.getElementById('object-desc');
         const assistedToggle = document.getElementById('assisted-toggle');
         
         const COLORS = {
@@ -138,7 +131,7 @@
         function updatePayload() {
             const payload = [...completedPolygons];
             if (currentPolygon.length > 0) {
-                payload.push({ class: activeClass, points: currentPolygon, description: descInput.value.trim() || "unknown feature" });
+                payload.push({ class: activeClass, points: currentPolygon });
             }
             hiddenInput.value = JSON.stringify(payload);
         }
@@ -177,15 +170,11 @@
 
         function commitCurrentShape() {
             if (currentPolygon.length > 0) {
-                const descValue = descInput.value.trim() || "unknown feature";
                 completedPolygons.push({
                     class: activeClass,
-                    points: currentPolygon,
-                    description: descValue
+                    points: currentPolygon
                 });
                 currentPolygon = [];
-                descInput.value = "";
-                descInput.blur();
                 updatePayload();
                 drawAll();
             }
@@ -195,15 +184,12 @@
         let startX = 0, startY = 0;
 
         canvas.addEventListener('mousedown', function(e) {
-            if (document.activeElement === nickInput || document.activeElement === descInput) return;
+            if (document.activeElement === nickInput) return;
             const rect = canvas.getBoundingClientRect();
             const x = Math.round((e.clientX - rect.left) * (256 / rect.width));
             const y = Math.round((e.clientY - rect.top) * (256 / rect.height));
 
             if (assistedMode) {
-                // Auto-commit any active shape before starting a new one
-                commitCurrentShape();
-                
                 startX = x;
                 startY = y;
                 isDragging = true;
@@ -275,24 +261,16 @@
             formData.append('y_min', y_min);
             formData.append('x_max', x_max);
             formData.append('y_max', y_max);
-            formData.append('active_class', activeClass);
             
             fetch('/api/v1/sam/predict', {
                 method: 'POST',
                 body: formData
             })
             .then(res => res.json())
-            .then(data => {
-                if (data && data.points && data.points.length > 2) {
-                    currentPolygon = data.points;
-                    descInput.value = data.auto_description;
+            .then(points => {
+                if (points && points.length > 2) {
+                    completedPolygons.push({ class: activeClass, points: points });
                     updatePayload();
-                    
-                    // Autofocus and select description
-                    setTimeout(() => {
-                        descInput.focus();
-                        descInput.select();
-                    }, 50);
                 }
                 drawAll();
             })
@@ -308,14 +286,6 @@
 
         window._lunaKeyHandler = function(e) {
             if (document.activeElement === nickInput) return;
-            
-            if (document.activeElement === descInput) {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    commitCurrentShape();
-                }
-                return;
-            }
 
             if (e.key === '1') { activeClass = 'PIT'; updateUI(); drawAll(); }
             if (e.key === '2') { activeClass = 'STONE'; updateUI(); drawAll(); }
@@ -342,7 +312,6 @@
             else if (e.key === 'Escape') {
                 currentPolygon = [];
                 completedPolygons = []; 
-                descInput.value = "";
                 updatePayload();
                 drawAll();
             } 

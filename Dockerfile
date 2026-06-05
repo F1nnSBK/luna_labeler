@@ -1,38 +1,57 @@
-# Use a lightweight python image
-FROM python:3.11-slim
+# Stage 1: Build stage
+FROM python:3.11-slim AS builder
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    git \
-    curl \
-    ffmpeg \
-    libsm6 \
-    libxext6 \
+WORKDIR /build
+
+COPY requirements.txt .
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# Set up a new user named "user" with UID 1000
+# Install python dependencies to a local folder
+RUN pip install --no-cache-dir --user -r requirements.txt
+
+
+# Stage 2: Final runner stage
+FROM python:3.11-slim
+
+# Install runtime dependencies for OpenCV/Rasterio
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    curl \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set up a non-root user named "user" with UID 1000
 RUN useradd -m -u 1000 user
 
-# Set env variables
+# Configure HF / Numba writable cache dirs under /tmp
 ENV HOME=/home/user \
     PATH=/home/user/.local/bin:$PATH \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    HF_HOME=/tmp/hf_cache \
+    NUMBA_CACHE_DIR=/tmp/numba_cache
 
-# Set the working directory
 WORKDIR $HOME/app
 
-# Copy requirements file first to leverage Docker cache
-COPY --chown=user:user requirements.txt .
-
-# Install dependencies as the non-root user
-USER user
-RUN pip install --no-cache-dir --upgrade -r requirements.txt
+# Copy installed site-packages from builder stage
+COPY --from=builder --chown=user:user /root/.local /home/user/.local
 
 # Copy the rest of the application files
 COPY --chown=user:user . .
 
-# Expose Hugging Face Space port
+USER user
+
+# Create directories for caching
+RUN mkdir -p /tmp/hf_cache /tmp/numba_cache
+
 EXPOSE 7860
 
-# Run uvicorn server on port 7860
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "7860"]
+# Run uvicorn server with production-grade worker count configuration
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "7860", "--workers", "1"]
