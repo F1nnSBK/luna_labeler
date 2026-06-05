@@ -44,7 +44,7 @@ def get_pit_name(nac_id: str) -> str:
             match = product_to_pit.get(digits_match.group(0))
     return match or ""
 
-token = os.getenv("TELEMETRY_TOKEN") or "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"
+token = os.getenv("TELEMETRY_TOKEN")
 ds = load_dataset("F1nnSBK/lunar-pits-dataset", token=token)
 
 total_positives = 0

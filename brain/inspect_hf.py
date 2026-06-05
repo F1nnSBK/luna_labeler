@@ -1,7 +1,7 @@
 from datasets import load_dataset
 import os
 
-token = os.getenv("TELEMETRY_TOKEN") or "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"
+token = os.getenv("TELEMETRY_TOKEN")
 ds = load_dataset("F1nnSBK/lunar-pits-dataset", token=token)
 for split in ds.keys():
     print(f"\n--- Split: {split} ---")

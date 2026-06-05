@@ -18,7 +18,7 @@ def parse_provenance(path_str: str) -> tuple[str, str]:
         return nac_id, prefix
     return "UNKNOWN", ""
 
-token = os.getenv("TELEMETRY_TOKEN") or "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"
+token = os.getenv("TELEMETRY_TOKEN")
 ds = load_dataset("F1nnSBK/lunar-pits-dataset", token=token)
 
 seen = set()
