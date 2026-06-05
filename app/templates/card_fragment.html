@@ -22,6 +22,14 @@
                 </div>
             </div>
 
+            <div class="flex items-center justify-between pt-2 border-t border-zinc-900/40">
+                <span class="text-[10px] uppercase tracking-widest text-zinc-600">Assisted Mode</span>
+                <label class="relative inline-flex items-center cursor-pointer select-none">
+                    <input type="checkbox" id="assisted-toggle" checked class="sr-only peer" />
+                    <div class="w-9 h-5 bg-zinc-800 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-zinc-400 peer-checked:after:bg-emerald-500 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-950/50 border border-zinc-700/60 peer-checked:border-emerald-500/60"></div>
+                </label>
+            </div>
+
             <div class="flex flex-col space-y-2 pt-2 border-t border-zinc-900/40">
                 <span class="text-[10px] uppercase tracking-widest text-zinc-600">Object Description</span>
                 <input type="text" id="object-desc" placeholder="No active object..." 
@@ -37,6 +45,7 @@
         <div class="space-y-4">
             <div class="border border-zinc-900 bg-zinc-950/40 rounded-xl p-4 space-y-2 text-[11px] text-zinc-500">
                 <div class="flex justify-between"><span class="text-zinc-400">[1, 2, 3]</span> <span>Switch Weapon</span></div>
+                <div class="flex justify-between"><span class="text-zinc-400">[M]</span> <span>Toggle Assisted</span></div>
                 <div class="flex justify-between"><span class="text-zinc-400">[Space]</span> <span>Freeze Shape</span></div>
                 <div class="flex justify-between"><span class="text-zinc-400">[Z]</span> <span>Undo Segment</span></div>
                 <div class="flex justify-between"><span class="text-zinc-400">[ESC]</span> <span>Wipe All</span></div>
@@ -83,6 +92,7 @@
         const toolIndicator = document.getElementById('active-tool-indicator');
         const nickInput = document.getElementById('operator-nick');
         const descInput = document.getElementById('object-desc');
+        const assistedToggle = document.getElementById('assisted-toggle');
         
         const COLORS = {
             'PIT': { stroke: '#10b981', fill: 'rgba(16, 185, 129, 0.15)', textClass: 'text-emerald-500', borderClass: 'border-emerald-500' },
@@ -93,6 +103,8 @@
         let activeClass = 'PIT';
         let completedPolygons = []; 
         let currentPolygon = [];    
+        let assistedMode = true;
+        let mouseX = 0, mouseY = 0;
 
         canvas.width = canvas.offsetWidth;
         canvas.height = canvas.offsetHeight;
@@ -113,6 +125,11 @@
             document.cookie = `labeler_session_id=${nick}__${clearBase}; path=/; max-age=2592000`;
         }
 
+        assistedToggle.addEventListener('change', (e) => {
+            assistedMode = e.target.checked;
+            drawAll();
+        });
+
         function updateUI() {
             toolIndicator.textContent = `MODE_${activeClass}`;
             toolIndicator.className = `${COLORS[activeClass].textClass} text-sm font-bold tracking-widest border-l-2 ${COLORS[activeClass].borderClass} pl-3 transition-all`;
@@ -121,7 +138,6 @@
         function updatePayload() {
             const payload = [...completedPolygons];
             if (currentPolygon.length > 0) {
-                // Temporary include current polygon without description
                 payload.push({ class: activeClass, points: currentPolygon, description: descInput.value.trim() || "unknown feature" });
             }
             hiddenInput.value = JSON.stringify(payload);
@@ -181,29 +197,57 @@
         canvas.addEventListener('mousedown', function(e) {
             if (document.activeElement === nickInput || document.activeElement === descInput) return;
             const rect = canvas.getBoundingClientRect();
-            startX = Math.round((e.clientX - rect.left) * (256 / rect.width));
-            startY = Math.round((e.clientY - rect.top) * (256 / rect.height));
-            isDragging = true;
+            const x = Math.round((e.clientX - rect.left) * (256 / rect.width));
+            const y = Math.round((e.clientY - rect.top) * (256 / rect.height));
+
+            if (assistedMode) {
+                startX = x;
+                startY = y;
+                isDragging = true;
+            } else {
+                // Manual point entry
+                currentPolygon.push([x, y]);
+                updatePayload();
+                drawAll();
+            }
         });
 
         canvas.addEventListener('mousemove', function(e) {
-            if (!isDragging) return;
             const rect = canvas.getBoundingClientRect();
-            const currentX = Math.round((e.clientX - rect.left) * (256 / rect.width));
-            const currentY = Math.round((e.clientY - rect.top) * (256 / rect.height));
-            
-            drawAll();
-            
-            const scaleX = canvas.width / 256;
-            const scaleY = canvas.height / 256;
-            ctx.strokeStyle = COLORS[activeClass].stroke;
-            ctx.lineWidth = 1;
-            ctx.setLineDash([3, 3]);
-            ctx.strokeRect(startX * scaleX, startY * scaleY, (currentX - startX) * scaleX, (currentY - startY) * scaleY);
+            mouseX = Math.round((e.clientX - rect.left) * (256 / rect.width));
+            mouseY = Math.round((e.clientY - rect.top) * (256 / rect.height));
+
+            if (assistedMode) {
+                if (!isDragging) return;
+                drawAll();
+                
+                const scaleX = canvas.width / 256;
+                const scaleY = canvas.height / 256;
+                ctx.strokeStyle = COLORS[activeClass].stroke;
+                ctx.lineWidth = 1;
+                ctx.setLineDash([3, 3]);
+                ctx.strokeRect(startX * scaleX, startY * scaleY, (mouseX - startX) * scaleX, (mouseY - startY) * scaleY);
+            } else {
+                // Render manual hover line to cursor
+                drawAll();
+                if (currentPolygon.length > 0) {
+                    const scaleX = canvas.width / 256;
+                    const scaleY = canvas.height / 256;
+                    ctx.beginPath();
+                    ctx.strokeStyle = COLORS[activeClass].stroke;
+                    ctx.lineWidth = 1.5;
+                    ctx.setLineDash([3, 3]);
+                    
+                    const lastPoint = currentPolygon[currentPolygon.length - 1];
+                    ctx.moveTo(lastPoint[0] * scaleX, lastPoint[1] * scaleY);
+                    ctx.lineTo(mouseX * scaleX, mouseY * scaleY);
+                    ctx.stroke();
+                }
+            }
         });
 
         canvas.addEventListener('mouseup', function(e) {
-            if (!isDragging) return;
+            if (!assistedMode || !isDragging) return;
             isDragging = false;
             
             const rect = canvas.getBoundingClientRect();
@@ -272,13 +316,22 @@
             if (e.key === '1') { activeClass = 'PIT'; updateUI(); drawAll(); }
             if (e.key === '2') { activeClass = 'STONE'; updateUI(); drawAll(); }
             if (e.key === '3') { activeClass = 'CRATER'; updateUI(); drawAll(); }
+            if (e.key === 'm' || e.key === 'M') {
+                assistedMode = !assistedMode;
+                assistedToggle.checked = assistedMode;
+                drawAll();
+            }
             
             if (e.key === ' ' || e.code === 'Space') {
                 e.preventDefault();
                 commitCurrentShape();
             }
             else if (e.key === 'z' || e.key === 'Z') {
-                completedPolygons.pop();
+                if (currentPolygon.length > 0) {
+                    currentPolygon.pop();
+                } else {
+                    completedPolygons.pop();
+                }
                 updatePayload();
                 drawAll();
             } 
