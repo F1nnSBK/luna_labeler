@@ -77,7 +77,7 @@ async def render_dashboard_shell(request: Request, response: Response, db: Sessi
     if not session_id:
         session_id = str(uuid.uuid4())[:12]
     
-    payload = StochasticCalibrationEngine.resolve_next_payload(0, db)
+    payload = StochasticCalibrationEngine.resolve_next_payload(0, db, session_id)
     
     rendered_template = templates.TemplateResponse(
         "index.html", 
@@ -112,7 +112,7 @@ async def handle_dashboard_interact(
         db.commit()
         
     next_steps = execution_steps + 1
-    next_payload = StochasticCalibrationEngine.resolve_next_payload(next_steps, db)
+    next_payload = StochasticCalibrationEngine.resolve_next_payload(next_steps, db, session_id)
     
     return templates.TemplateResponse(
         "card_fragment.html", 
@@ -121,8 +121,9 @@ async def handle_dashboard_interact(
 
 
 @app.get("/api/v1/telemetry/next")
-async def get_next_telemetry_payload(execution_steps: int, db: Session = Depends(get_db)):
-    payload = StochasticCalibrationEngine.resolve_next_payload(execution_steps, db)
+async def get_next_telemetry_payload(request: Request, execution_steps: int, db: Session = Depends(get_db)):
+    session_id = request.cookies.get("labeler_session_id", "api_worker")
+    payload = StochasticCalibrationEngine.resolve_next_payload(execution_steps, db, session_id)
     if not payload:
         raise HTTPException(status_code=404, detail="No pipeline payloads available")
     return payload
@@ -233,10 +234,14 @@ async def handle_dashboard_undo(request: Request, execution_steps: int, db: Sess
         session_id=session_id
     ).order_by(desc(TelemetryComponent.updated_at)).first()
     
+    from datetime import datetime, timedelta, timezone
+
     if last_item:
         last_item.validation_status = "PENDING"
         last_item.matrix_class = "UNKNOWN"
         last_item.spatial_vector_data = None
+        last_item.locked_by = session_id
+        last_item.locked_until = datetime.now(timezone.utc) + timedelta(minutes=5)
         db.commit()
         
         # Override the payload with the reverted item
@@ -248,7 +253,7 @@ async def handle_dashboard_undo(request: Request, execution_steps: int, db: Sess
         }
     else:
         # If no history exists, just fetch the normal next item
-        payload = StochasticCalibrationEngine.resolve_next_payload(execution_steps, db)
+        payload = StochasticCalibrationEngine.resolve_next_payload(execution_steps, db, session_id)
 
     return templates.TemplateResponse(
         "card_fragment.html", 

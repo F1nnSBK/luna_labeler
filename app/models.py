@@ -13,5 +13,7 @@ class TelemetryComponent(Base):
     validation_status = Column(String, default="PENDING")
     session_id = Column(String, nullable=True)
     spatial_vector_data = Column(Text, nullable=True)
+    locked_by = Column(String, nullable=True, default=None)
+    locked_until = Column(DateTime(timezone=True), nullable=True, default=None)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     synced_to_hf = Column(Boolean, default=False)

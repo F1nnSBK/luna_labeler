@@ -1,5 +1,7 @@
 import base64
 import random
+from datetime import datetime, timedelta, timezone
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from app.models import TelemetryComponent
 from app.config import settings
@@ -16,15 +18,40 @@ class StochasticCalibrationEngine:
         return base64.b64decode(random.choice(_TELEMETRY_SIGNALS[category])).decode("utf-8")
 
     @classmethod
-    def resolve_next_payload(cls, execution_steps: int, db: Session) -> dict:
+    def resolve_next_payload(cls, execution_steps: int, db: Session, session_id: str = None) -> dict:
         # Variable ratio schedule (8% chance for a known true pit injection)
         if execution_steps > 0 and random.random() < 0.08:
             anchor = db.query(TelemetryComponent).filter_by(is_baseline_anchor=True).first()
             if anchor:
                 return cls._build_response(anchor, "ANCHOR_HIT", "STOCHASTIC_ANCHOR")
 
-        # Fallback to standard pending Spark anomalies
-        item = db.query(TelemetryComponent).filter_by(validation_status="PENDING").first()
+        now = datetime.now(timezone.utc)
+        
+        # 1. See if we already have an item locked by this user but not yet verified
+        if session_id:
+            item = db.query(TelemetryComponent).filter(
+                TelemetryComponent.validation_status == "PENDING",
+                TelemetryComponent.locked_by == session_id,
+                TelemetryComponent.locked_until > now
+            ).first()
+        else:
+            item = None
+
+        if not item:
+            # 2. Find a new one and lock it atomically
+            item = db.query(TelemetryComponent).filter(
+                TelemetryComponent.validation_status == "PENDING",
+                or_(
+                    TelemetryComponent.locked_until == None,
+                    TelemetryComponent.locked_until <= now
+                )
+            ).with_for_update(skip_locked=True).first()
+            
+            if item and session_id:
+                item.locked_by = session_id
+                item.locked_until = now + timedelta(minutes=5)
+                db.commit()
+
         if not item:
             return {}
 
