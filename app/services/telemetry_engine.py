@@ -7,9 +7,19 @@ from app.models import TelemetryComponent
 from app.config import settings
 
 _TELEMETRY_SIGNALS = {
-    "ANCHOR_HIT": ["U2FmZSBMb2NoLiBTaGVlc2gu", "Qm9kZW5sb3MgZGVlcCwgc2xheS4=", "V2lsZGVyIFNjaGx1bmQsIG5vIGNhcC4="],
-    "BOULDER_MISSED": ["Q3JpbmdlLCB3ZXIgZGFzIGbDdXIgZWluIExvY2ggaMOkbHQu", "QnJ1ZGVyLCBkYXMgaXN0IGVpbiBTdGVpbi4gTmV4dC4="],
-    "CRATER_BLENDER": ["R290dGxvc2VyIEtyYXRlciwgYWJzb2x1dGVyIEJsZW5kZXIu", "TnVyIFNjaGF0dGVuLCBsb3drZXkgTC4="]
+    "ANCHOR_HIT": [
+        "U2ljaGVyZSBWZXJ0aWVmdW5nIGVya2FubnQuIFNpZ25hbCB2ZXJpZml6aWVydC4=",
+        "U2lnbmlmaWthbnRlIFRpZWZlIGRldGVrdGllcnQuIE1lc3N1bmcgc3RhYmlsLg==",
+        "QXVzZ2VwcsOkZ3RlIEhvaGxyYXVtLVN0cnVrdHVyIGJlc3TDpHRpZ3Qu"
+    ],
+    "BOULDER_MISSED": [
+        "RmVobGtsYXNzaWZpa2F0aW9uIHdhaHJzY2hlaW5saWNoOiBTdHJ1a3R1ciBlbnRzcHJpY2h0IGtlaW5lbSBLcmF0ZXIu",
+        "T2JqZWt0IGFscyBHZXN0ZWluc2Zvcm1hdGlvbiBrbGFzc2lmaXppZXJ0LiBGb3J0ZmFocmVuLg=="
+    ],
+    "CRATER_BLENDER": [
+        "QXR5cGlzY2hlIEtyYXRlcnN0cnVrdHVyLiBFcmjDtmh0ZSBWYXJpYW56Lg==",
+        "S29udHJhc3RhYndlaWNodW5nIGR1cmNoIFNjaGF0dGVud3VyZi4gVW5nZW5hdWlna2VpdCBtw7ZnbGljaC4="
+    ]
 }
 
 class StochasticCalibrationEngine:
