@@ -14,3 +14,4 @@ class TelemetryComponent(Base):
     session_id = Column(String, nullable=True)
     spatial_vector_data = Column(Text, nullable=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    synced_to_hf = Column(Boolean, default=False)

@@ -253,3 +253,15 @@ async def handle_dashboard_undo(request: Request, execution_steps: int, db: Sess
         "card_fragment.html", 
         {"request": request, "payload": payload, "steps": max(0, execution_steps - 1)}
     )
+
+
+import asyncio
+from app.cron import sync_supabase_to_huggingface
+import app.cron as cron
+
+@app.on_event("startup")
+async def schedule_hf_syncer():
+    # Pass the data loader memory pointer to the cron file reference
+    cron.hf_source_cache = hf_dataset_cache
+    # Fire and forget the background thread safely inside the async loop
+    asyncio.create_task(sync_supabase_to_huggingface())
