@@ -42,8 +42,18 @@ if not weights_path.exists():
             out_file.write(response.read())
         print("MobileSAM weights downloaded successfully (fallback method).")
 
-# Load MobileSAM model
-sam_model = SAM(str(weights_path))
+# Load MobileSAM model with hot-swap capability
+sam_last_loaded = 0
+sam_model = None
+
+def get_sam_model():
+    global sam_model, sam_last_loaded
+    current_mtime = weights_path.stat().st_mtime if weights_path.exists() else 0
+    if sam_model is None or current_mtime > sam_last_loaded:
+        print("Loading/Reloading SAM model weights...")
+        sam_model = SAM(str(weights_path))
+        sam_last_loaded = current_mtime
+    return sam_model
 
 # BLIP model removed in favor of zero-latency NumPy/OpenCV statistical feature generator
 
@@ -209,7 +219,8 @@ async def sam_predict(
             image_obj = image_obj.convert("RGB")
             
         # Run MobileSAM prediction with Bounding Box coordinates mapping to 256x256 image pixels
-        results = sam_model.predict(image_obj, bboxes=[x_min, y_min, x_max, y_max], verbose=False)
+        model_instance = get_sam_model()
+        results = model_instance.predict(image_obj, bboxes=[x_min, y_min, x_max, y_max], verbose=False)
         
         rounded_points = []
         if results and len(results) > 0 and results[0].masks is not None:
@@ -264,10 +275,20 @@ async def handle_dashboard_undo(request: Request, execution_steps: int, db: Sess
 import asyncio
 from app.cron import sync_supabase_to_huggingface
 import app.cron as cron
+import app.active_learning as al
+import app.retrain_worker as rw
 
 @app.on_event("startup")
-async def schedule_hf_syncer():
-    # Pass the data loader memory pointer to the cron file reference
+async def startup_event_hook():
+    # Pass the data loader memory pointer to reference caches
     cron.hf_source_cache = hf_dataset_cache
-    # Fire and forget the background thread safely inside the async loop
+    al.hf_source_cache = hf_dataset_cache
+    rw.hf_source_cache = hf_dataset_cache
+    
+    # Initialize SAM model
+    get_sam_model()
+    
+    # Fire and forget the background threads safely inside the async loop
     asyncio.create_task(sync_supabase_to_huggingface())
+    asyncio.create_task(al.active_learning_loop())
+    asyncio.create_task(rw.retrain_worker_loop(weights_path))

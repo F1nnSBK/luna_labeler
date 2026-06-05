@@ -45,7 +45,7 @@ class StochasticCalibrationEngine:
                     TelemetryComponent.locked_until == None,
                     TelemetryComponent.locked_until <= now
                 )
-            ).with_for_update(skip_locked=True).first()
+            ).order_by(TelemetryComponent.confidence_index.asc()).with_for_update(skip_locked=True).first()
             
             if item and session_id:
                 item.locked_by = session_id
