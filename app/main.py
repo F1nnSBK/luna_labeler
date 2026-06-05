@@ -17,6 +17,7 @@ from app.config import settings
 import urllib.request
 from pathlib import Path
 from ultralytics import SAM
+from transformers import BlipProcessor, BlipForConditionalGeneration
 
 # Initialize database schema
 Base.metadata.create_all(bind=engine)
@@ -44,6 +45,12 @@ if not weights_path.exists():
 
 # Load MobileSAM model
 sam_model = SAM(str(weights_path))
+
+# Load BLIP image captioning model on CPU
+print("Loading BLIP image captioning model...")
+blip_processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
+blip_model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base")
+print("BLIP model loaded successfully.")
 
 templates = Jinja2Templates(directory="app/templates")
 
@@ -192,7 +199,7 @@ async def sam_predict(
     y_max: float = Form(...),
     db: Session = Depends(get_db)
 ):
-    """Run MobileSAM model inference to auto-generate a mask based on a bounding box prompt."""
+    """Run MobileSAM model inference to auto-generate a mask based on a bounding box prompt, and BLIP to generate a text description."""
     item = db.query(TelemetryComponent).filter_by(id=component_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Component not found")
@@ -205,20 +212,40 @@ async def sam_predict(
         if image_obj.mode != "RGB":
             image_obj = image_obj.convert("RGB")
             
-        # Run MobileSAM prediction with bounding box coordinates mapping to 256x256 image pixels
+        # Run MobileSAM prediction with Bounding Box coordinates mapping to 256x256 image pixels
         # Ultralytics SAM expects coordinates in format [x_min, y_min, x_max, y_max]
         results = sam_model.predict(image_obj, bboxes=[x_min, y_min, x_max, y_max], verbose=False)
         
+        rounded_points = []
         if results and len(results) > 0 and results[0].masks is not None:
             xy_coords = results[0].masks.xy
             if len(xy_coords) > 0 and len(xy_coords[0]) > 0:
                 points = xy_coords[0].tolist()
                 rounded_points = [[round(p[0]), round(p[1])] for p in points]
-                return rounded_points
-                
-        return []
+        
+        # Crop the bounding box from the original image to run BLIP captioning
+        img_w, img_h = image_obj.size
+        # Bounding box coordinates are scaled to 256x256 on the frontend. Scale them back to actual image size.
+        scale_x = img_w / 256.0
+        scale_y = img_h / 256.0
+        
+        # Ensure coordinates are within valid bounds
+        x1 = max(0.0, min(x_min, 256.0)) * scale_x
+        y1 = max(0.0, min(y_min, 256.0)) * scale_y
+        x2 = max(0.0, min(x_max, 256.0)) * scale_x
+        y2 = max(0.0, min(y_max, 256.0)) * scale_y
+        
+        auto_description = "unknown feature"
+        if (x2 - x1) >= 4 and (y2 - y1) >= 4:
+            cropped_img = image_obj.crop((x1, y1, x2, y2))
+            # Run BLIP condition-free captioning
+            inputs = blip_processor(cropped_img, return_tensors="pt")
+            out = blip_model.generate(**inputs, max_new_tokens=20)
+            auto_description = blip_processor.decode(out[0], skip_special_tokens=True)
+            
+        return {"points": rounded_points, "auto_description": auto_description}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"SAM prediction failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"SAM prediction or captioning failed: {str(e)}")
 
 
 @app.post("/dashboard/undo", response_class=HTMLResponse)

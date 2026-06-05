@@ -67,11 +67,24 @@ async def sync_supabase_to_huggingface():
                     api.upload_file(path_or_fileobj=mask_bytes, path_in_repo=mask_path, repo_id=target_repo, repo_type="dataset")
                     
                     # 4. Append metadata generation line
+                    instance_descriptions = []
+                    try:
+                        features = json.loads(item.spatial_vector_data) if item.spatial_vector_data else []
+                        for f in features:
+                            if "description" in f:
+                                instance_descriptions.append({
+                                    "class": f.get("class"),
+                                    "description": f.get("description")
+                                })
+                    except Exception:
+                        pass
+
                     metadata_lines.append({
                         "file_name": img_path,
                         "mask_file_name": mask_path,
                         "dominant_class": item.matrix_class,
                         "operator_session": item.session_id,
+                        "instance_descriptions": instance_descriptions,
                         "raw_vector_data": item.spatial_vector_data
                     })
                     
