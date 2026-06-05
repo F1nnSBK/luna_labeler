@@ -1,107 +1,105 @@
+"""
+app/active_learning.py
+
+Scores PENDING patches by edge complexity (variance of Laplacian).
+High complexity → low confidence_index → shown first in the labeler UI.
+Runs every 2 hours as a background task started from app/cron.py.
+"""
+
+from __future__ import annotations
+
 import asyncio
-import io
+import datetime
 import logging
-import numpy as np
+from pathlib import Path
+
 import cv2
-from PIL import Image
+import numpy as np
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
+
 from app.database import SessionLocal
 from app.models import TelemetryComponent
 
 logger = logging.getLogger("active_learning")
-logger.setLevel(logging.INFO)
 
-# Global dataset cache reference initialized from main application on startup
-hf_source_cache = None
+IMAGES_DIR = Path(__file__).resolve().parent.parent / "data" / "active_learning_ds" / "images"
 
-def calculate_local_statistical_uncertainty(image_bytes: bytes) -> float:
-    """
-    Local statistical uncertainty based on edge complexity (variance of Laplacian)
-    to prioritize complex structures (rocks, crater rims) without calling any external APIs.
-    """
+
+def _laplacian_variance(img_path: Path) -> float:
+    """Returns variance of Laplacian for a grayscale image. Higher = more edges."""
     try:
-        nparr = np.frombuffer(image_bytes, np.uint8)
-        img = cv2.imdecode(nparr, cv2.IMREAD_GRAYSCALE)
+        img = cv2.imread(str(img_path), cv2.IMREAD_GRAYSCALE)
         if img is None:
-            return 0.5
-        
-        # Heuristic: High variance of Laplacian indicates sharp edges and complexity.
-        var = cv2.Laplacian(img, cv2.CV_64F).var()
-        
-        # Map variance (0 to 1000+) to range [0.0, 1.0] where 1.0 is high detail / high priority
-        score = float(1.0 - np.exp(-var / 400.0))
-        return score
+            return 0.0
+        return float(cv2.Laplacian(img, cv2.CV_64F).var())
     except Exception as e:
-        logger.warning(f"Statistical complexity calculation failed: {e}")
-        return 0.5
+        logger.warning("Could not score %s: %s", img_path.name, e)
+        return 0.0
 
-def score_unlabeled_pool(db: Session):
-    """
-    Selects 200 random PENDING components that are not locked,
-    calculates their statistical complexity locally, and updates their confidence_index.
-    """
-    if hf_source_cache is None:
-        logger.warning("hf_source_cache is not initialized. Skipping pool scoring.")
-        return
 
-    import datetime
-    from sqlalchemy import or_
+def score_unlabeled_pool(db: Session, batch_size: int = 200) -> int:
+    """
+    Scores up to batch_size unlocked PENDING components and updates confidence_index.
+    Returns number of components scored.
+    """
     now = datetime.datetime.now(datetime.timezone.utc)
-    
-    components = db.query(TelemetryComponent).filter(
-        TelemetryComponent.validation_status == "PENDING",
-        or_(
-            TelemetryComponent.locked_until == None,
-            TelemetryComponent.locked_until <= now
+
+    components = (
+        db.query(TelemetryComponent)
+        .filter(
+            TelemetryComponent.validation_status == "PENDING",
+            or_(
+                TelemetryComponent.locked_until == None,
+                TelemetryComponent.locked_until <= now,
+            ),
         )
-    ).order_by(TelemetryComponent.confidence_index.asc()).limit(200).all()
+        .order_by(TelemetryComponent.confidence_index.asc())
+        .limit(batch_size)
+        .all()
+    )
 
     if not components:
         logger.info("No pending components to score.")
-        return
+        return 0
 
-    logger.info(f"Starting active learning statistical scoring loop for {len(components)} components...")
-    
-    scored_count = 0
+    logger.info("Scoring %d components...", len(components))
+    scored = 0
+
     for item in components:
-        try:
-            split_name, row_idx = item.file_path.split("::")
-            orig_img = hf_source_cache[split_name][int(row_idx)]["image"]
-            
-            img_buf = io.BytesIO()
-            orig_img.save(img_buf, format="PNG")
-            img_bytes = img_buf.getvalue()
-            
-            # Compute statistical uncertainty locally
-            uncertainty = calculate_local_statistical_uncertainty(img_bytes)
-            
-            # High uncertainty (1.0) -> low confidence_index (0.0)
-            item.confidence_index = float(1.0 - uncertainty)
-            scored_count += 1
-            
-        except Exception as e:
-            logger.error(f"Error scoring component {item.id}: {e}")
-            
+        img_path = IMAGES_DIR / item.file_path
+        if not img_path.exists():
+            logger.warning("Image not found on disk: %s", item.file_path)
+            continue
+
+        var = _laplacian_variance(img_path)
+        # High variance → complex image → low confidence_index → labelled first
+        item.confidence_index = float(1.0 - np.exp(-var / 400.0))
+        scored += 1
+
     try:
         db.commit()
-        logger.info(f"Scored {scored_count} components using local statistical complexity.")
-    except Exception as commit_err:
+        logger.info("Scored %d components.", scored)
+    except Exception as e:
         db.rollback()
-        logger.error(f"Failed to commit scored confidence indices: {commit_err}")
+        logger.error("Commit failed after scoring: %s", e)
 
-async def active_learning_loop():
-    """Infinite loop scoring the unlabeled pool every 2 hours."""
-    logger.info("Active learning background task worker started.")
-    # Wait a bit on startup for dataset caching to populate
-    await asyncio.sleep(15)
-    
+    return scored
+
+
+async def active_learning_loop() -> None:
+    """Runs every 2 hours. Called from app/cron.py start_background_tasks()."""
+    logger.info("Active learning loop started (interval: 2h).")
+    await asyncio.sleep(15)  # short delay to let FastAPI finish startup
+
     while True:
         db = SessionLocal()
         try:
             score_unlabeled_pool(db)
         except Exception as e:
-            logger.error(f"Active learning scoring loop encountered an error: {e}")
+            logger.error("Scoring loop error: %s", e)
+            db.rollback()
         finally:
             db.close()
-            
-        await asyncio.sleep(7200) # 2 hours
+
+        await asyncio.sleep(7200)
