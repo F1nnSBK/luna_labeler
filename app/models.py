@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Column, String, Float, Boolean, Text, DateTime
+from sqlalchemy import Column, String, Float, Boolean, Text, DateTime, Integer
 from app.database import Base
 
 class TelemetryComponent(Base):
@@ -17,3 +17,12 @@ class TelemetryComponent(Base):
     locked_until = Column(DateTime(timezone=True), nullable=True, default=None)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     synced_to_hf = Column(Boolean, default=False)
+    
+    # New COCO & Provenance fields
+    nac_id = Column(String(32), nullable=True)
+    patch_origin_x = Column(Integer, nullable=True)
+    patch_origin_y = Column(Integer, nullable=True)
+    gsd_m_per_px = Column(Float, nullable=True)
+    annotation_mode = Column(String(16), default="sam_assisted")
+    hf_sync_status = Column(String(16), default="pending")
+    hf_split = Column(String(8), nullable=True)

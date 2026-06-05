@@ -72,7 +72,7 @@ class MetricPayload(BaseModel):
 def get_db_stats(db: Session) -> dict:
     pending = db.query(TelemetryComponent).filter_by(validation_status="PENDING").count()
     verified = db.query(TelemetryComponent).filter_by(validation_status="VERIFIED").count()
-    synced = db.query(TelemetryComponent).filter(TelemetryComponent.validation_status == "VERIFIED", TelemetryComponent.synced_to_hf == True).count()
+    synced = db.query(TelemetryComponent).filter(TelemetryComponent.validation_status == "VERIFIED", TelemetryComponent.hf_sync_status == 'synced').count()
     return {"pending": pending, "verified": verified, "synced": synced}
 
 
@@ -153,14 +153,17 @@ async def get_next_telemetry_payload(request: Request, execution_steps: int, db:
     return payload
 
 
-from app.cron import run_sync_cycle
+from app.cron import sync_to_hf
 
 @app.post("/api/v1/sync/trigger", response_class=HTMLResponse)
 async def trigger_manual_sync(request: Request, db: Session = Depends(get_db)):
     """Manually triggers the Hugging Face sync cycle and returns updated statistics."""
     sync_count = 0
     try:
-        sync_count = run_sync_cycle(db)
+        res = await sync_to_hf(db, settings.HF_TOKEN, "F1nnSBK/lunar-debris-and-voids")
+        if res.errors:
+            print(f"[MANUAL_SYNC_ERROR] Errors during sync: {res.errors}")
+        sync_count = res.synced_images
     except Exception as e:
         print(f"[MANUAL_SYNC_ERROR] Failed: {e}")
         
