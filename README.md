@@ -1,3 +1,13 @@
+---
+title: Luna Labeler
+emoji: 🌖
+colorFrom: green
+colorTo: indigo
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # Luna Labeler
 
 Luna Labeler is a fast, specialized web-based tool designed for **instance segmentation labeling** on lunar surface images. It allows annotators to identify and outline features like pits, stones, and craters directly on a web interface using an overlay canvas. Label data is stored in a relational database (e.g., Supabase PostgreSQL) and can be exported as ML-ready segmentation masks.
